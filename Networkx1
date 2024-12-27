@@ -1,0 +1,138 @@
+!pip3 install networkx
+import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
+import itertools
+import copy
+import pandas as pd
+
+
+#Definimos nuestro grafo no dirigido
+G=nx.Graph()
+
+#Colocamos los datos sobre los nodos
+Indices={'N1' : 0, 'N2' : 1, 'N3' : 2, 'N4' : 3, 'N5' : 4, 'N6' : 5, 'N7' : 6}
+Nodos=  {'N1' : {}, 'N2' : {'P7': ['N7',60]}, 'N3' : {'P6': ['N6',100], 'P9': ['N4',78], 'P10': ['N7',110]} , 'N4' : {'P5': ['N5',70], 'P1': ['N3',80]}, 'N5' : {'P3': ['N2',70]}, 'N6' : {'P2': ['N3',50]} , 'N7' : {'P4': ['N2',60], 'P8': ['N5',55]}}
+#Definamos las matrices que nos indican los recorridos de la personas
+q_partida=[[0,0,0,1,0,0,0],[0,0,0,0,0,1,0],[0,0,0,0,1,0,0],[0,0,0,0,0,0,1],[0,0,0,1,0,0,0],[0,0,1,0,0,0,0],[0,1,0,0,0,0,0],[0,0,0,0,0,0,1],[0,0,1,0,0,0,0],[0,0,1,0,0,0,0]]
+q_llegada=[[0,0,1,0,0,0,0],[0,0,1,0,0,0,0],[0,1,0,0,0,0,0],[0,1,0,0,0,0,0],[0,0,0,0,1,0,0],[0,0,0,0,0,1,0],[0,0,0,0,0,0,1],[0,0,0,0,1,0,0],[0,0,0,1,0,0,0],[0,0,0,0,0,0,1]]
+#Además de tener como dato, la matriz de pesos de las aristas
+T=[[0,4,4,5,5,9,9],[4,0,6,3,10,8,11],[4,6,0,10,3,11,4],[5,3,10,0,12,3,13],[5,10,3,12,0,10,3],[9,8,11,3,10,0,14],[9,11,4,13,3,14,0]]
+
+#Tomamos los nodos de donde parten los clientes
+List1=[iy for ix, row in enumerate(q_partida) for iy, i in enumerate(row) if i == 1]
+unique_list1 = list(dict.fromkeys(List1))
+
+#Agregamos atributos a los nodos
+for i in Nodos.keys():
+    G.add_nodes_from([(i, Nodos[i])])
+
+#Agregamos aristas en un nodo no dirigido
+Lista0=list(G.nodes)
+for i in range(len(G.nodes)-1):
+  j=i+1
+  while (j <= len(G.nodes)-1):
+    G.add_edge(Lista0[i], Lista0[j], Características={'distance': T[i][j]})
+    j+=1
+
+
+# Agregamos aristas y sus atributos en un nodo dirigido
+i=0
+for nodo in G.nodes:
+  if nodo != 'N1':
+    G.add_edge(nodo, 'N1', Características={'distance': T[i][0]})
+    for j in range(len(Nodos[nodo].values())):
+      G.add_edge(nodo, list(Nodos[nodo].values())[j][0], Características={'distance': T[i][Indices[list(Nodos[nodo].values())[j][0]]]})
+    if i in unique_list1:
+       G.add_edge('N1', nodo, Características={'distance': T[0][i]})
+  i+=1
+
+
+nx.draw_circular(G,
+                 node_color="lightblue",
+                 edge_color="gray",
+                 font_size=24,
+                 width=2, with_labels=True, node_size=3500,
+)
+
+
+def camino_corto(graph, Origen, Llegada):
+    """Calcule la distancia más corta entre cada par de nodos en un gráfico. Devuelve un diccionario codificado en pares de nodos (tuplas) ."""
+    camino = nx.dijkstra_path(G, source=Origen, target=Llegada, weight='distance')
+    return camino
+def arista_cercana(Digraf, Origen):
+  path={Origen:[]}
+  for neighbor in Digraf[Origen]:
+    path[Origen].append(neighbor)
+  return path
+
+#camino=camino_corto(G, 'N6', 'N1')
+camino=['N6','N4','N1']
+sum=0
+for i in range(len(camino)-1):
+  sum+=G.edges[camino[i],camino[i+1]]['Características']['distance']
+
+
+#Construyamos los posibles caminos con k de profundidad
+def Posibles_caminos(valor):
+    Elementos=[]
+    N='N1'
+    Camm=[N]
+    k=0
+    while (k <=valor):
+      Elementos.append(Camm)
+      #print('Profundidad %d' %(kk+1))
+      Camm2=[]
+      for nod in Camm:
+        Camm2=Camm2+arista_cercana(G,nod)[nod]
+      #print(Camm2)
+      Camm=Camm2
+      k+=1
+    caminos=[['N1']]
+    #print(Elementos)
+    for i in range(len(Elementos)-1):
+      n=0
+      Cam=[]
+      for j in range(len(Elementos[i])):
+        nn=len(arista_cercana(G,Elementos[i][j])[Elementos[i][j]])
+        for k in range(nn):
+          Cam.append(caminos[j]+[Elementos[i+1][k+n]])
+        n+=nn
+      caminos=Cam
+    return Cam
+
+  
+def get_key(val):
+    for key, value in Indices.items():
+         if val == value:
+            Nodo=key
+    return Nodo
+
+##Analizaremos como vamos a elegir la mejor decisión
+Envios='Incompletos'
+k=len(unique_list1)
+while (Envios == 'Incompletos'):
+  Caminos=Posibles_caminos(k)
+  Caminos_factibles=[]
+  for lista in Caminos:
+    kk=0
+    for i in range(len(unique_list1)):
+      Variante=list(Nodos[get_key(unique_list1[i])].keys())
+      Variante2=[Nodos[get_key(unique_list1[i])][Variante[l]][0] for l in range(len(Variante))]
+      if get_key(unique_list1[i]) not in lista:
+        kk=1 
+      else:
+        for var in Variante2:
+          if var not in lista[lista.index(get_key(unique_list1[i]))+1:]:
+            kk=1     
+    if kk == 0:
+      Caminos_factibles.append(lista)
+      Envios='Completos'       
+  k+=1
+
+
+for caminos_opt in Caminos_factibles:
+  sum=0
+  for i in range(len(caminos_opt)-1):
+    sum+=G.edges[caminos_opt[i],caminos_opt[i+1]]['Características']['distance']
+  print(caminos_opt, sum)
